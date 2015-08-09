@@ -1,0 +1,3093 @@
+package Controller;
+
+import javax.swing.SwingUtilities;
+
+public class Bootstrap {
+
+	//main method
+	public static void main(String[] args) {
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				StartGame();
+			}
+		});
+	}
+
+	//start the game method
+	public static void StartGame() {
+		@SuppressWarnings("unused")
+		GameController newGame = new GameController();
+	}
+}package Controller;
+
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+import View.HighscoreScreen;
+
+public class EndGameLogic implements ActionListener {
+
+	private GameController gc;
+
+	//constructor
+	public EndGameLogic(GameController gc) {
+		this.setGameController(gc);
+	}
+
+	//action listener
+	@Override
+	public void actionPerformed(ActionEvent e) {
+		/** This method reacts to hitting the startmenu, highscores and exit button in the main game */
+		String keyCommand = e.getActionCommand();
+
+		//react to hitting the highscores key
+		if (keyCommand.equals("highscores")) {
+			@SuppressWarnings("unused")
+			HighscoreScreen scores = new HighscoreScreen(this.gc.getGameScreen(), "Current all-time highscores");
+		}
+
+		//react to hitting the exit key
+		if (keyCommand.equals("exit")) {
+			System.exit(0);
+		}
+
+		//react to hitting the startmenu key
+		if (keyCommand.equals("startmenu")) {
+			this.gc.showStart();
+		}
+	}
+
+	//setter
+	public void setGameController(GameController gc) {
+		this.gc = gc;
+	}
+
+	//getter
+	public GameController getGameController() {
+		return this.gc;
+	}
+}
+package Controller;
+
+import Logic.Galaxy;
+import View.*;
+
+public class GameController {
+
+	private StartScreen start;
+	private GameScreen game;
+	private StartLogic sl;
+	private GameLogic gl;
+	private EndGameLogic endl;
+
+	//constructor
+	public GameController() {
+		//initiate the listeners
+		sl = new StartLogic(this, "not selected", 50);
+		gl = new GameLogic(this, null, sl.getSkillset());
+		endl = new EndGameLogic(this);
+
+		//initiate the gui
+		start = new StartScreen("Hyperspace Hazard - START", sl, sl);
+		game = new GameScreen("Hyperspace Hazard", 16, 32, gl, endl);
+
+		//set the visibility
+		start.setVisible(true);
+		game.setVisible(false);
+	}
+
+	//methods	
+	public void showGame() {
+		/** This method regulates switching from the naming screen to the actual game screen */
+		//transfer information from startscreen to gamelogic
+		gl.updateSettings(sl.getDifficulty(), sl.getSkillset());
+
+		//regulate the visibility of the screens
+		start.setVisible(false);
+		game.setVisible(true);
+	}
+
+	public void showStart() {
+		/** This method regulates switching from the game screen to the start screen */
+		//reset the startscreen to its initial parameters
+		sl.setDifficulty(null);
+		sl.setSkillset(50);
+
+		//reset the game screen
+		resetGameBoard();
+
+		//regulate the visibility of the screens
+		start.setVisible(true);
+		game.setVisible(false);
+	}
+
+	public void updateGameBoard(Galaxy galaxyBoard) {
+		/** This method takes the updated board from the game logic and passes it on to the Game Screen */
+		game.updateGameBoard(galaxyBoard);
+	}
+
+	public void updateStatsPanel(double[] stats) {
+		/** This method takes the updated stats from the game logic and passes them on to the Game Screen */
+		game.updateStatsPanel(stats);
+	}
+
+	public void resetGameBoard() {
+		/** This method resets the whole game board and the stats */
+		game.resetGameAndStats();
+	}
+
+	//getter
+	public StartScreen getStartScreen() {
+		return this.start;
+	}
+
+	public GameScreen getGameScreen() {
+		return this.game;
+	}
+}
+package Controller;
+
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+import javax.swing.JOptionPane;
+
+import Logic.*;
+import View.EndGameScreen;
+import View.GenericPopUp;
+
+public class GameLogic implements ActionListener {
+
+	//class variables
+	private GameController gc;
+	private String difficulty = null;
+	private int skillset;
+	private int killcount;
+	private int fleecount;
+
+	//game elements and the galaxy
+	private Player player;
+	private Asteroid haley;
+	private AsteroidField cuyperbelt;
+	private BlackHole gargantua;
+	private Moon titan;
+	private Planet jupiter;
+	private Star sirius;
+	private MotherShip deathstar;
+	private EnemyShip level1;
+	private EnemyShip level2;
+	private EnemyShip level3;
+
+	private Galaxy galaxyBoard;
+
+	//constructor
+	public GameLogic(GameController gc, String difficulty, int skillset) {
+		this.setGameController(gc);
+		this.setDifficulty(difficulty);
+		this.setSkillset(skillset);
+	}
+
+	//initalization methods
+	public void updateSettings(String difficulty, int skillset) {
+		/** This method updates the difficulty and the skillset after they have been chosen in the start screen
+		 * Additionally, it sets the stats of the player and makes the gameboard */
+		//initalize player and galaxy and game elements
+		this.setDifficulty(difficulty);
+		this.setSkillset(skillset);
+		initializeGalaxy();
+		initializePlayer();
+		initializeGameElements();
+		setPositions();
+
+		//perform the updates
+		updateStatsPanel(0);
+		updateGameBoard();
+	}
+
+	private void initializeGalaxy() {
+		/** This method initalizes the galaxy */
+		galaxyBoard = new Galaxy(16, 32, difficulty);
+		galaxyBoard.setGalaxy();
+	}
+
+	private void initializePlayer() {
+		/** This method initializes the player */
+		player = new Player(this.difficulty, this.skillset);
+	}
+
+	private void initializeGameElements() {
+		/** This method initializes all the other elements of the game */
+		//all these numbers are up for rebalancing if necessary
+		haley = new Asteroid(10.0, 10.0);
+		cuyperbelt = new AsteroidField(5.0);
+		gargantua = new BlackHole(25.0);
+		titan = new Moon(15.0, 15.0);
+		jupiter = new Planet(20.0, 20.0);
+		sirius = new Star(20.0);
+		deathstar = new MotherShip(200.0, 20.0, 20.0);
+		level1 = new EnemyShip(40.0, 5.0, 5.0);
+		level2 = new EnemyShip(60.0, 10.0, 10.0);
+		level3 = new EnemyShip(80.0, 15.0, 15.0);
+	}
+
+	public void setPositions() {
+		/// This method initializes the position of the player and the position of the enemy mothership */
+		//adapt the player class (care: the board counts from zero)
+		int row = 2;
+		int col = 2;
+		player.setCoordinates(row, col);
+
+		//adapt the galaxy board to reflext positions
+		galaxyBoard.adaptGalaxy("player", row, col);
+		galaxyBoard.adaptGalaxy("mothership", 14, 30);
+		galaxyBoard.makeGalaxyVisible(row, col);
+	}
+
+	//game control methods
+	public void checkGame() {
+		// This methods constantly checks whether the game is lost or not */
+		//check whether the game is lost or not
+		boolean lost = false;
+		boolean won = false;
+		if ((player.getHitpoints() <= 0.0) || (player.getFuel() <= 0.0)) {
+			lost = true;
+		} else if (deathstar.getHitpoints() <= 0.0) {
+			won = true;
+		}
+
+		//act appropriately
+		if (lost && !won) {
+			gameOver();
+		} else if (won && !lost) {
+			gameWon();
+		}
+	}
+
+	public void gameOver() {
+		// This method acts accordingly to a game over
+		//Generate end-of-game screen
+		String message = "Space has claimed another life. Better luck next time!";
+		double endscore = calculateScore(killcount);
+		EndGameScreen endscreen = new EndGameScreen(this.gc.getGameScreen(), "Lost the game", message, endscore);
+
+		//end the game, reset the board
+		if (endscreen.getBoolean()) {
+			endscreen.dispose();
+			this.gc.showStart();
+		}
+	}
+
+	public void gameWon() {
+		// This method acts accordingly to a won game
+		//Generate end-of-game screen
+		String message = "Congratulations, you have defeaten the enemy fleet!";
+		double endscore = calculateScore(killcount);
+		EndGameScreen endscreen = new EndGameScreen(this.gc.getGameScreen(), "Won the game", message, endscore);
+
+		//end the game, reset the board
+		if (endscreen.getBoolean()) {
+			endscreen.dispose();
+			this.gc.showStart();
+		}
+	}
+
+	//action listener
+	@Override
+	public void actionPerformed(ActionEvent e) {
+		/** This method listens to the game and does all the necessary calculations */
+		//extract the necessary information from the board
+		String keyCommand = e.getActionCommand();
+		String[] coordinates = keyCommand.split(":");
+		int r_new = Integer.parseInt(coordinates[0]);
+		int c_new = Integer.parseInt(coordinates[1]);
+		GalacticObject temporary = galaxyBoard.getGalacticObject(r_new, c_new);
+
+		//other information
+		int r_old = player.getRowCoordinate();
+		int c_old = player.getColCoordinate();
+		boolean reachable = placeIsReachable(r_new, c_new, r_old, c_old);
+
+		int[] surround = checkSurroundings(r_new, c_new);
+		int asteroidfields = surround[0];
+		int blackholes = surround[1];
+		int stars = surround[2];
+
+		Object[] mining = {"Experience","Fuel"};
+		Object[] skillpoints = {"Offense","Defense"};
+
+		killcount = 0;
+		fleecount = 0;
+
+		//place clicked is not reachable
+		if (!reachable) {
+			@SuppressWarnings("unused")
+			GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "You will have to travel closer first to reach this sector!");
+		}
+
+		//when player clicks on empty space
+		if ((temporary.isOpen()) && (reachable)) {
+			player.setCoordinates(r_new, c_new);
+			player.decreaseFuel(2.0);
+			galaxyBoard.adaptGalaxy("player", r_new, c_new);
+			galaxyBoard.adaptGalaxy("open", r_old, c_old);
+			galaxyBoard.makeGalaxyVisible(r_new, c_new);
+		}		
+
+		//when player clicks on asteroid
+		if (temporary.isAsteroid() && !temporary.isMarked() && reachable) {
+			double xp = haley.minesXP();
+			double fl = haley.minesFuel();
+
+			//mine for xp or fuel
+			int ans1 = JOptionPane.showOptionDialog(null, "Do you want to mine the asteroid for experience or fuel?", "Mining", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, mining, mining[0]);
+			if (ans1 == 0) {
+				//if mined for experience check whether spent on defense or offense
+				int ans2 = JOptionPane.showOptionDialog(null, "Spend the experience on offense or defense?", "Level up", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, skillpoints, skillpoints[0]);
+				if (ans2 == 0) {
+					//increase the offense
+					player.increaseOffense(xp);
+					galaxyBoard.adaptGalaxy("marked", r_new, c_new);
+				} else if (ans2 == 1) {
+					//increase the defense
+					player.increaseDefense(xp);
+					galaxyBoard.adaptGalaxy("marked", r_new, c_new);
+				}
+			} else if (ans1 == 1) {
+				//increase the fuel
+				player.increaseFuel(fl);
+				galaxyBoard.adaptGalaxy("marked", r_new, c_new);
+			}
+		} else if (temporary.isAsteroid() && temporary.isMarked() && reachable) {
+			//cannot move to this location
+			@SuppressWarnings("unused")
+			GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "This asteroid is already mined!");
+		}
+
+		//when player clicks on moon
+		if (temporary.isMoon() && !temporary.isMarked() && reachable) {
+			double xp = titan.minesXP();
+			double fl = titan.minesFuel();
+
+			//mine for xp or fuel
+			int ans1 = JOptionPane.showOptionDialog(null, "Do you want to mine the moon for experience or fuel?", "Mining", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, mining, mining[0]);
+			if (ans1 == 0) {
+				//if mined for experience check whether spent on defense or offense
+				int ans2 = JOptionPane.showOptionDialog(null, "Spend experience on offense or defense?", "Level up", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, skillpoints, skillpoints[0]);
+				if (ans2 == 0) {
+					//increase the offense
+					player.increaseOffense(xp);
+					galaxyBoard.adaptGalaxy("marked", r_new, c_new);
+				} else if (ans2 == 1) {
+					//increase the defense
+					player.increaseDefense(xp);
+					galaxyBoard.adaptGalaxy("marked", r_new, c_new);
+				}
+			} else if (ans1 == 1) {
+				//increase the fuel
+				player.increaseFuel(fl);
+				galaxyBoard.adaptGalaxy("marked", r_new, c_new);
+			}
+		} else if (temporary.isMoon() && temporary.isMarked() && reachable) {
+			//cannot move to this location
+			@SuppressWarnings("unused")
+			GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "This moon is already mined!");
+		}
+
+		//when player clicks on planet
+		if (temporary.isPlanet() && !temporary.isMarked() && reachable) {
+			double xp = jupiter.minesXP();
+			double fl = jupiter.minesFuel();
+
+			//mine for xp or fuel
+			int ans1 = JOptionPane.showOptionDialog(null, "Do you want to mine the planet for experience or fuel?", "Mining", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, mining, mining[0]);
+			if (ans1 == 0) {
+				//if mined for experience check whether spent on defense or offense
+				int ans2 = JOptionPane.showOptionDialog(null, "Spend experience on offense or defense?", "Level up", JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, skillpoints, skillpoints[0]);
+				if (ans2 == 0) {
+					//increase the offense
+					player.increaseOffense(xp);
+					galaxyBoard.adaptGalaxy("marked", r_new, c_new);
+				} else if (ans2 == 1) {
+					//increase the defense
+					player.increaseDefense(xp);
+					galaxyBoard.adaptGalaxy("marked", r_new, c_new);
+				}
+			} else if (ans1 == 1) {
+				//increase the fuel
+				player.increaseFuel(fl);
+				galaxyBoard.adaptGalaxy("marked", r_new, c_new);
+			}
+		} else if (temporary.isPlanet() && temporary.isMarked() && reachable) {
+			//cannot move to this location
+			@SuppressWarnings("unused")
+			GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "This planet is already mined!");
+		}
+
+		//when player clicks on asteroid field or is near one
+		if (temporary.isAsteroidField() && reachable) {
+			double damage = cuyperbelt.getDamage();
+			player.decreaseDefense(damage);
+			@SuppressWarnings("unused")
+			GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "You are flying into an asteroid field! Your shields are sustaining damage!");
+		}
+
+		if ((asteroidfields > 0) && reachable) {
+			//player is near an asteroid field and loses some defense
+			double damage = cuyperbelt.getDamage();
+			player.decreaseDefense(damage);
+			@SuppressWarnings("unused")
+			GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "You are nearing an asteroid field, your shields are sustaining damage!");
+		}
+
+		//when player clicks on a star
+		if (temporary.isStar() && reachable) {
+			double damage = sirius.getDamage();
+			player.decreaseDefense(damage);
+			@SuppressWarnings("unused")
+			GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "Captain, we are flying into a star! We will get torn apart by radiation!");
+		}
+
+		if ((stars > 0) && reachable) {
+			//player is near an asteroid field and loses some defense
+			double damage = sirius.getDamage();
+			player.decreaseDefense(damage);
+			@SuppressWarnings("unused")
+			GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "You're nearing a star, your shields are sustaining damage due to radiation!");
+		}
+
+		//when player clicks on black hole
+		if (temporary.isBlackHole() && reachable) {
+			double damage = gargantua.getFuelReduction();
+			player.decreaseFuel(damage);
+			@SuppressWarnings("unused")
+			GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "Captain! We are closing in on a black hole, burn fuel to escape its gravitational pull!");
+		}
+
+		if ((blackholes > 0) && reachable) {
+			//player is near an asteroid field and loses some defense
+			double damage = gargantua.getFuelReduction();
+			player.decreaseFuel(damage);
+			@SuppressWarnings("unused")
+			GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "You're nearing a blackhole, you're burning fuel to escape its gravitational pull!");
+		}
+
+		//when player clicks on enemy ship level 1
+		if (temporary.isShipLevel1() && reachable) {
+			double enemyDamage = level1.doesDamage();
+			double playerDamage = player.doesDamage();
+
+			//do you want to attack?
+			int ans1 = JOptionPane.showConfirmDialog(null, "Enemy ship! Attack?", "Enemy fight", JOptionPane.YES_NO_OPTION);
+			if (ans1 == JOptionPane.YES_OPTION) {
+				//fight with the enemy
+				boolean flee = false;
+				boolean defeat = false;
+				while (!flee && !defeat) {
+					//damage is dealt
+					level1.takesDamage(playerDamage);
+					player.takesDamage(enemyDamage);
+					updateStatsPanel(killcount);
+
+					//message
+					String message = "You attacked the enemy ship for " + playerDamage + "! This reduced its health to " + level1.getHitpoints() + "! Alas, you were attacked for " + enemyDamage + " damage!";
+					@SuppressWarnings("unused")
+					GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Enemy fight", message);
+
+					//are you or the enemy defeaten?
+					if ((player.getHitpoints() <= 0.0) || (level1.getHitpoints() <= 0.0)) {
+						defeat = true;
+						flee = false;
+					} else {
+						//do you want to flee?
+						int ans2 = JOptionPane.showConfirmDialog(null, "Continue the attack? Fleeing will give the enemy the chance to regain its strength!", "Enemy fight", JOptionPane.YES_NO_OPTION);
+						if (ans2 == JOptionPane.YES_OPTION) {
+							flee = false;
+						} else {
+							flee = true;
+						}
+						defeat = false;
+					}
+				}
+				//adapt the galaxy, reset the ship
+				if (level1.getHitpoints() <= 0.0) {
+					galaxyBoard.adaptGalaxy("open", r_new, c_new);
+				}
+				level1.setHitpoints(40);
+				@SuppressWarnings("unused")
+				GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Success", "An enemy has been defeaten!");
+			} else if (ans1 == JOptionPane.NO_OPTION) {
+				@SuppressWarnings("unused")
+				GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "Succesfully fled!");
+			}
+		}
+
+		//when player clicks on enemy ship level 2
+		if (temporary.isShipLevel2() && reachable) {
+			double enemyDamage = level2.doesDamage();
+			double playerDamage = player.doesDamage();
+
+			//do you want to attack?
+			int ans1 = JOptionPane.showConfirmDialog(null, "Enemy ship! Attack?", "Enemy fight", JOptionPane.YES_NO_OPTION);
+			if (ans1 == JOptionPane.YES_OPTION) {
+				//fight with the enemy
+				boolean flee = false;
+				boolean defeat = false;
+				while (!flee && !defeat) {
+					//damage is dealt
+					level2.takesDamage(playerDamage);
+					player.takesDamage(enemyDamage);
+					updateStatsPanel(killcount);
+
+					//message
+					String message = "You attacked the enemy ship for " + playerDamage + "! This reduced its health to " + level1.getHitpoints() + "! Alas, you were attacked for " + enemyDamage + " damage!";
+					@SuppressWarnings("unused")
+					GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Enemy fight", message);
+
+					//are you or the enemy defeaten?
+					if ((player.getHitpoints() <= 0.0) || (level2.getHitpoints() <= 0.0)) {
+						defeat = true;
+						flee = false;
+					} else {
+						//do you want to flee?
+						int ans2 = JOptionPane.showConfirmDialog(null, "Continue the attack? Fleeing will give the enemy the chance to regain its strength!", "Enemy fight", JOptionPane.YES_NO_OPTION);
+						if (ans2 == JOptionPane.YES_OPTION) {
+							flee = false;
+						} else {
+							flee = true;
+						}
+						defeat = false;
+					}
+				}
+				//adapt the galaxy, reset the ship
+				if (level2.getHitpoints() <= 0.0) {
+					galaxyBoard.adaptGalaxy("open", r_new, c_new);
+				}
+				level2.setHitpoints(60);
+				@SuppressWarnings("unused")
+				GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Success", "An enemy has been defeaten!");
+			} else if (ans1 == JOptionPane.NO_OPTION) {
+				@SuppressWarnings("unused")
+				GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "Succesfully fled!");
+			}
+		}
+
+		//when player clicks on enemy ship level 3
+		if (temporary.isShipLevel3() && reachable) {
+			double enemyDamage = level3.doesDamage();
+			double playerDamage = player.doesDamage();
+
+			//do you want to attack?
+			int ans1 = JOptionPane.showConfirmDialog(null, "Enemy ship! Attack?", "Enemy fight", JOptionPane.YES_NO_OPTION);
+			if (ans1 == JOptionPane.YES_OPTION) {
+				//fight with the enemy
+				boolean flee = false;
+				boolean defeat = false;
+				while (!flee && !defeat) {
+					//damage is dealt
+					level3.takesDamage(playerDamage);
+					player.takesDamage(enemyDamage);
+					updateStatsPanel(killcount);
+
+					//message
+					String message = "You attacked the enemy ship for " + playerDamage + "! This reduced its health to " + level1.getHitpoints() + "! Alas, you were attacked for " + enemyDamage + " damage!";
+					@SuppressWarnings("unused")
+					GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Enemy fight", message);
+
+					//are you or the enemy defeated?
+					if ((player.getHitpoints() <= 0.0) || (level3.getHitpoints() <= 0.0)) {
+						defeat = true;
+						flee = false;
+					} else {
+						//do you want to attack or flee?
+						int ans2 = JOptionPane.showConfirmDialog(null, "Continue the attack? Fleeing will give the enemy the chance to regain its strength!", "Enemy fight", JOptionPane.YES_NO_OPTION);
+						if (ans2 == JOptionPane.YES_OPTION) {
+							flee = false;
+						} else {
+							flee = true;
+						}
+						defeat = false;
+					}
+				}
+				//adapt the galaxy, reset the ship
+				if (level3.getHitpoints() <= 0.0) {
+					galaxyBoard.adaptGalaxy("open", r_new, c_new);
+				}
+				level3.setHitpoints(60);
+				@SuppressWarnings("unused")
+				GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Success", "You defeated the enemy ship!");
+			} else if (ans1 == JOptionPane.NO_OPTION) {
+				@SuppressWarnings("unused")
+				GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "Succesfully fled!");
+			}
+		}
+
+		//when player clicks on mother ship
+		if (temporary.isMotherShip() && !temporary.isMarked() && reachable) {
+			//first encounter with the mother ship
+			int ans1 = JOptionPane.showConfirmDialog(null, "The enemy mothership! Attack?", "Boss fight", JOptionPane.YES_NO_OPTION);
+			if ((ans1 == JOptionPane.YES_OPTION) || ((ans1 == JOptionPane.NO_OPTION) && (fleecount >= 1))) {
+				//attack the mother ship or get caught by it
+				if ((fleecount >= 1) && (ans1 == JOptionPane.NO_OPTION)) {
+					@SuppressWarnings("unused")
+					GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Boss fight", "You can't flee anymore, the mothership caught you!");
+				} else {
+					@SuppressWarnings("unused")
+					GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Boss fight", "You are attacking the mothership! Fight well!");
+				}
+				boolean flee = false;
+				boolean defeat = false;
+				while (!flee && !defeat) {
+					double enemyDamage = deathstar.doesDamage();
+					double playerDamage = player.doesDamage();
+
+					//damage is dealt
+					deathstar.takesDamage(playerDamage);
+					player.takesDamage(enemyDamage);
+					updateStatsPanel(killcount);
+
+					//message
+					String message = "You attacked the mother ship for " + playerDamage + "! This reduced its health to " + deathstar.getHitpoints() + "! Alas, you were attacked for " + enemyDamage + " damage!";
+					@SuppressWarnings("unused")
+					GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Boss fight", message);
+
+					//are you or the enemy defeaten?
+					if ((player.getHitpoints() <= 0.0) || (deathstar.getHitpoints() <= 0.0)) {
+						defeat = true;
+						flee = false;
+					} else {
+						//do you want to flee?
+						int ans2 = JOptionPane.showConfirmDialog(null, "Continue the attack?", "Boss fight", JOptionPane.YES_NO_OPTION);
+						if (ans2 == JOptionPane.YES_OPTION) {
+							flee = false;
+						} else {
+							flee = true;
+							fleecount++;
+						}
+						defeat = false;
+					}
+				}				
+			} else if (ans1 == JOptionPane.YES_OPTION && (fleecount < 1)) {
+				//flee from the mother ship (succeeds only once)
+				@SuppressWarnings("unused")
+				GenericPopUp popup = new GenericPopUp(this.gc.getGameScreen(), "Warning", "Succesfully fled! Be carefull though, you can't always run!");
+				fleecount++;
+			}
+		}
+
+		//check the status of the game and update the board
+		updateStatsPanel(killcount);
+		updateGameBoard();
+		checkGame();
+	}
+
+	//update methods
+	public void updateGameBoard() {
+		/** This method updates the game board on the game screen */
+		this.gc.updateGameBoard(galaxyBoard);
+	}
+
+	public void updateStatsPanel(int killcount) {
+		/** This method updates the stats panel of the player */
+		double[] stats = new double[6];
+		stats[0] = calculateScore(killcount);
+		stats[1] = player.getHitpoints();
+		stats[2] = player.getFuel();
+		stats[3] = player.getOffense();
+		stats[4] = player.getDefense();
+		stats[5] = player.getOffense() + player.getDefense();
+		this.gc.updateStatsPanel(stats);
+	}
+
+	//aid methods
+	public double calculateScore(int killcount) {
+		/** This method calculates the score so far and returns the result */
+		double score = 0.0;
+		score = (player.getFuel() + player.getDefense() + player.getOffense()) * (1 + (killcount / 10));
+		return score;
+	}
+
+	public int[] checkSurroundings(int r, int c) {
+		/** This method checks whether the player is in the neighbourhood of a dangerous galactic object */
+		//surrounding coordinates
+		int r_low = r - 1;
+		int r_high = r + 2;
+		int c_low = c - 1;
+		int c_high = c + 2;
+
+		//danger count
+		int asteroidfields = 0;
+		int blackholes = 0;
+		int stars = 0;
+
+		for (int i = r_low; i < r_high; i++) {
+			for (int j = c_low; j < c_high; j++) {
+				if (galaxyBoard.goodLocation(i, j)) {
+					//extract the galacticObject
+					GalacticObject temporary = galaxyBoard.getGalacticObject(i, j);
+
+					//check this object
+					if (temporary.isAsteroidField()) {
+						asteroidfields++;
+					}
+
+					if (temporary.isBlackHole()) {
+						blackholes++;
+					}
+
+					if (temporary.isStar()) {
+						stars++;
+					}
+				}
+			}
+		}
+
+		//build and return result
+		int[] surround = new int[3];
+		surround[0] = asteroidfields;
+		surround[1] = blackholes;
+		surround[2] = stars;
+		return surround;
+	}
+
+	public boolean placeIsReachable(int r_new, int c_new, int r_old, int c_old) {
+		/** This method checks whether the player can reach a certain place */
+		boolean reachable = false;
+		int r_pos = (r_new - r_old);
+		int c_pos = (c_new - c_old);
+		if ((Math.abs(r_pos) <= 1) && (Math.abs(c_pos) <= 1)) {
+			reachable = true;
+		}
+
+		//return result
+		return reachable;
+	}
+
+	//setter
+	public void setGameController(GameController gc) {
+		this.gc = gc;
+	}
+
+	public void setDifficulty(String difficulty) {
+		this.difficulty = difficulty;
+	}
+
+	public void setSkillset(int skillset) {
+		this.skillset = skillset;
+	}
+
+	//getter
+	public GameController getGameController() {
+		return this.gc;
+	}
+
+	public String getDifficulty() {
+		return this.difficulty;
+	}
+
+	public int getSkillset() {
+		return this.skillset;
+	}
+}
+package Controller;
+
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+import javax.swing.JSlider;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
+
+import View.*;
+
+public class StartLogic implements ActionListener, ChangeListener {
+
+	private GameController gc;
+	private String difficulty = null;
+	private int skillset = 50;
+
+	//constructor
+	public StartLogic(GameController gc, String initialDifficulty, int initialSkills) {
+		this.setGameController(gc);
+	}
+
+	//change listener
+	@Override
+	public void stateChanged(ChangeEvent e) {
+		JSlider source = (JSlider)e.getSource();
+		if (!source.getValueIsAdjusting()) {
+			int pct = (int)source.getValue();
+			this.setSkillset(pct);
+		}
+	}
+
+	//action listener
+	@Override
+	public void actionPerformed(ActionEvent f) {
+		/** This method records the difficulty setting and the start, exit and highscores button */
+		String keyCommand = f.getActionCommand();
+
+		//react to hitting the difficulty setting keys
+		if (keyCommand.equals("easy") || keyCommand.equals("normal") || keyCommand.equals("hard")) {
+			this.setDifficulty(keyCommand);
+		}
+
+		//react to hitting the highscores key
+		if (keyCommand.equals("highscores")) {
+			@SuppressWarnings("unused")
+			HighscoreScreen scores = new HighscoreScreen(this.gc.getStartScreen(), "Current all-time highscores");
+		}
+
+		//react to hitting the exit key
+		if (keyCommand.equals("exit")) {
+			System.exit(0);
+		}
+
+		//react to hitting the start key
+		if ((keyCommand.equals("start")) && (this.getDifficulty() != null)) {
+			this.gc.showGame();
+		} else if ((keyCommand.equals("start")) && (this.getDifficulty() == null)) {
+			String warningString = "Please select a difficulty";
+			@SuppressWarnings("unused")
+			GenericPopUp warning = new GenericPopUp(this.gc.getStartScreen(), "warning", warningString);
+		}
+	}
+
+	//setter
+	public void setGameController(GameController gc) {
+		this.gc = gc;
+	}
+
+	public void setDifficulty(String difficulty) {
+		this.difficulty = difficulty;
+	}
+
+	public void setSkillset(int skillset) {
+		this.skillset = skillset;
+	}
+
+	//getter
+	public GameController getGameController() {
+		return this.gc;
+	}
+
+	public String getDifficulty() {
+		return this.difficulty;
+	}
+
+	public int getSkillset() {
+		return this.skillset;
+	}
+}
+package Controller;
+
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
+
+import javax.swing.JOptionPane;
+
+public class WindowHandler implements WindowListener {
+
+	//methods
+
+	@Override
+	public void windowActivated(WindowEvent e) {
+
+	}
+
+	@Override
+	public void windowClosed(WindowEvent e) {
+
+	}
+
+	@Override
+	public void windowClosing(WindowEvent e) {
+		int answer = JOptionPane.showConfirmDialog(null, "Do you really want to exit?", "Exit", JOptionPane.YES_NO_OPTION);
+		if (answer == JOptionPane.YES_OPTION) {
+			System.exit(0);
+		}
+	}
+
+	@Override
+	public void windowDeactivated(WindowEvent e) {
+
+	}
+
+	@Override
+	public void windowDeiconified(WindowEvent e) {
+
+	}
+
+	@Override
+	public void windowIconified(WindowEvent e) {
+
+	}
+
+	@Override
+	public void windowOpened(WindowEvent e) {
+
+	}
+}
+package Logic;
+
+public class Asteroid implements Mineable {
+	private double experience;
+	private double fuel;
+
+	//constructor
+	public Asteroid(double experience, double fuel) {
+		this.setExp(experience);
+		this.setFuel(fuel);
+	}
+
+	//methods
+	public double minesXP() {
+		double result = this.getExp();
+		return result;
+	}
+	public double minesFuel() {
+		double result = this.getFuel();
+		return result;
+	}
+
+	//setter
+	public void setExp(double experience) {
+		this.experience = experience;
+	}
+	public void setFuel(double fuel) {
+		this.fuel = fuel;
+	}
+
+	//getter
+	public double getExp() {
+		return this.experience;
+	}
+	public double getFuel() {
+		return this.fuel;
+	}
+}
+package Logic;
+
+public class AsteroidField {
+	private double damage;
+
+	//constructor
+	public AsteroidField(double damage) {
+		this.setDamage(damage);
+	}
+
+	//setter
+	public void setDamage(double damage) {
+		this.damage = damage;
+	}
+
+	//getter
+	public double getDamage() {
+		return this.damage;
+	}
+}
+package Logic;
+
+public class BlackHole implements Slowable {
+	private double fuelreduction;
+
+	//constructor
+	public BlackHole(double fuelreduction) {
+		this.setFuelReduction(fuelreduction);
+	}
+
+	//methods
+	public double reducesFuel() {
+		double result = this.getFuelReduction();
+		return result;
+	}
+
+	//setter
+	public void setFuelReduction(double fuelreduction) {
+		this.fuelreduction = fuelreduction;
+	}
+
+	//getter
+	public double getFuelReduction() {
+		return this.fuelreduction;
+	}
+}
+package Logic;
+
+/** The Increasable interface defines some methods that are applicable on all the player tiles */
+
+public interface Changeable {
+	/** The increaseOffense method indicates that the offensive capabilities of the player can be increased*/
+	public void increaseOffense(double experience);
+
+	/** The increaseDefense method indicates that the defensive capabilities of the player can be increased*/
+	public void increaseDefense(double experience);
+
+	/** The decreaseDefense method indicates that the defensive capabilities of the player can be increased*/
+	public void decreaseDefense(double damage);
+
+	/** The increaseFuel method indicates that the fuel level of the player can be increased*/
+	public void increaseFuel(double fuel);
+
+	/** The decreaseFuel method indicates that the fuel level of the player can be decreased*/
+	public void decreaseFuel(double fuel);
+}package Logic;
+
+public class EnemyShip implements Fightable, Mineable {
+	private double hitpoints;
+	private double defense;
+	private double offense;
+
+	//constructor
+	public EnemyShip(double hitpoints, double defense, double offense) {
+		this.setHitpoints(hitpoints);
+		this.setDefense(defense);
+		this.setOffense(offense);
+	}
+
+	//methods
+	public double doesDamage() {
+		/** this method returns the attack damage of the ship */
+		return this.getOffense();
+	}
+	public void takesDamage(double attack) {
+		/** this method resets the hitpoints of the ship after an enemy attack */
+		double attackDamage;
+		if (this.getDefense() >= attack) {
+			attackDamage = 0;
+		} else {
+			attackDamage = attack - this.getDefense();
+		}
+		double result = this.hitpoints - attackDamage;
+		if (result >= 0) {
+			this.setHitpoints(result);
+		} else {
+			this.setHitpoints(0);
+		}
+	}
+	public double minesXP() {
+		/** this method returns some experience (equal to the defense divided by 2) if the ship has been defeated */
+		double experience = 0;
+		if (this.hitpoints == 0) {
+			experience = this.defense / 2;
+		}
+		return experience;
+	}
+	public double minesFuel() {
+		/** this method returns some experience (equal to the defense divided by 2) if the ship has been defeated */
+		double fuel = 0;
+		if (this.hitpoints == 0) {
+			fuel = this.defense / 2;
+		}
+		return fuel;
+	}
+
+	//setter
+	public void setHitpoints(double hitpoints) {
+		this.hitpoints = hitpoints;
+	}
+	public void setDefense(double defense) {
+		this.defense = defense;
+	}
+	public void setOffense(double offense) {
+		this.offense = offense;
+	}
+
+	//getter
+	public double getHitpoints() {
+		return this.hitpoints;
+	}
+	public double getDefense() {
+		return this.defense;
+	}
+	public double getOffense() {
+		return this.offense;
+	}
+}
+package Logic;
+
+/** The Fightable interface defines some methods that are applicable on all the opponent tiles */
+
+public interface Fightable {
+	/** The doesDamage method defines that the opponent tile can lowers the hitpoints of the player */
+	public double doesDamage();
+
+	/** The takesDamage method defines that the opponent tile can take damage and lowers its hitpoints after an enemy attack,
+	it doesn't have any return type */
+	public void takesDamage(double attack);
+}package Logic;
+
+import java.util.Random;
+
+public class GalacticObject {
+
+	//enumerate the values that a certain object in space can be
+	public static enum SpaceObject {
+		PLAYER,
+		ASTEROID,
+		ASTEROIDFIELD,
+		BLACKHOLE,
+		MOON,
+		PLANET,
+		STAR,
+		MOTHERSHIP,
+		SHIPLVL1,
+		SHIPLVL2,
+		SHIPLVL3,
+		OPEN;
+	}
+
+	//all variables associated with an object in the galaxy
+	SpaceObject spaceobject;
+	private Integer row;
+	private Integer column;
+	private boolean marked;
+	private boolean visible;
+
+	//constructor (build a galactic object)
+	public GalacticObject(int r, int c) {
+		this.row = new Integer(r);
+		this.column = new Integer(c);
+		this.setMarked(false);	
+		this.makeVisible(false);
+		spaceobject = SpaceObject.OPEN;
+	}
+
+	//methods
+	public void makeOpen() {
+		/** Make this specific object open */
+		this.spaceobject = SpaceObject.OPEN;
+	}
+
+	public void makePlayer() {
+		/** Make this specific object a player */
+		this.spaceobject = SpaceObject.PLAYER;
+	}
+
+	public void makeAsteroid() {
+		/** Make this specific object an asteroid */
+		this.spaceobject = SpaceObject.ASTEROID;
+	}
+
+	public void makeAsteroidField() {
+		/** Make this specific object an asteroid field */
+		this.spaceobject = SpaceObject.ASTEROIDFIELD;
+	}
+
+	public void makeBlackHole() {
+		/** Make this specific object a black hole */
+		this.spaceobject = SpaceObject.BLACKHOLE;
+	}
+
+	public void makeMoon() {
+		/** Make this specific object a moon */
+		this.spaceobject = SpaceObject.MOON;
+	}
+
+	public void makePlanet() {
+		/** Make this specific object a planet */
+		this.spaceobject = SpaceObject.PLANET;
+	}
+
+	public void makeStar() {
+		/** Make this specific object a star */
+		this.spaceobject = SpaceObject.STAR;
+	}
+
+	public void makeMotherShip() {
+		/** Make this specific object an enemy mothership */
+		this.spaceobject = SpaceObject.MOTHERSHIP;
+	}
+
+	public void makeEnemyShip(int lvl) {
+		/** Make this specific object an enemy ship */
+		//check the input
+		int level;
+		if (lvl < 0) {
+			level = 0;
+		} else if (lvl > 3) {
+			level = 3;
+		} else {
+			level = lvl;
+		}
+
+		//assign a value to the spaceobject
+		Random rand = new Random();
+		int random = rand.nextInt(100);
+		switch (level) {
+		case 1:
+			this.spaceobject = SpaceObject.SHIPLVL1;
+			break;
+		case 2:
+			if (random < 50) {
+				this.spaceobject = SpaceObject.SHIPLVL1;
+			} else {
+				this.spaceobject = SpaceObject.SHIPLVL2;
+			}
+			break;
+		case 3:
+			if (random < 33) {
+				this.spaceobject = SpaceObject.SHIPLVL1;
+			} else if (random < 66) {
+				this.spaceobject = SpaceObject.SHIPLVL2;
+			} else {
+				this.spaceobject = SpaceObject.SHIPLVL3;
+			}
+			break;
+		}
+	}
+
+	//setter
+
+	public void setMarked(boolean marked) {
+		this.marked = marked;
+	}
+
+	public void makeVisible(boolean visible)  {
+		this.visible = visible;
+	}
+
+	//getter
+	public int getRow(){
+		return this.row ; 
+	}
+
+	public int getColumn(){
+		return this.column;
+	}
+
+	public boolean isMarked(){
+		return this.marked;
+	}
+
+	public boolean isVisible(){
+		return this.visible;
+	}
+
+	public boolean isOpen() {
+		/** This method returns true when the object is open, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.OPEN)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isPlayer() {
+		/** This method returns true when the object is a player, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.PLAYER)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isAsteroid() {
+		/** This method returns true when the object is an asteroid, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.ASTEROID)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isAsteroidField() {
+		/** This method returns true when the object is an asteroid field, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.ASTEROIDFIELD)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isBlackHole() {
+		/** This method returns true when the object is a black hole, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.BLACKHOLE)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isMoon() {
+		/** This method returns true when the object is a moon, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.MOON)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isPlanet() {
+		/** This method returns true when the object is a planet, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.PLANET)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isStar() {
+		/** This method returns true when the object is a star, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.STAR)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isMotherShip() {
+		/** This method returns true when the object is a player, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.MOTHERSHIP)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isShipLevel1() {
+		/** This method returns true when the object is an enemy ship level 1, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.SHIPLVL1)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isShipLevel2() {
+		/** This method returns true when the object is an enemy ship level 2, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.SHIPLVL2)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public boolean isShipLevel3() {
+		/** This method returns true when the object is an enemy ship level 3, else it returns false */
+		if (this.spaceobject.equals(SpaceObject.SHIPLVL3)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+}
+package Logic;
+
+import java.util.Random;
+
+public class Galaxy {
+
+	private GalacticObject[][] galaxyArray;
+	private Integer row;
+	private Integer col;
+	private String difficulty = null;
+
+	//constructor
+	public Galaxy(int rows, int columns, String difficulty) {
+		this.setRows(rows);
+		this.setColumns(columns);
+		this.setDifficulty(difficulty);
+	}
+
+	//methods
+	public void setGalaxy() {
+		/** This method builds the galaxy according to a given difficulty */
+		galaxyArray = new GalacticObject[this.row][this.col];
+
+		//difficulty
+		int level = initiateLevel();
+
+		//construct the array
+		Random rand = new Random();
+		int random;
+		for (int y = 0; y < this.row; y++) {
+			for (int x = 0; x < this.col; x++) {
+				GalacticObject obj = new GalacticObject(y,x);
+				random = rand.nextInt(100);
+				if (random < 5) {
+					//asteroid (5 percent)
+					obj.makeAsteroid();
+				} else if (random < 8) {
+					//asteroidfield (3 percent)
+					obj.makeAsteroidField();
+				} else if (random < 9) {
+					//blackhole (1 percent)
+					obj.makeBlackHole();
+				} else if (random < 14) {
+					//moon (5 percent)
+					obj.makeMoon();
+				} else if (random < 19) {
+					//planet (5 percent)
+					obj.makePlanet();
+				} else if (random < 20) {
+					//star (1 percent)
+					obj.makeStar();
+				} else if (random < 25) {
+					//enemyship (5 percent)
+					obj.makeEnemyShip(level);
+				} else {
+					//rest is open (= empty)
+					obj.makeOpen();
+				}
+				galaxyArray[y][x] = obj;
+			}
+		}
+	}
+
+	public void adaptGalaxy(String type, int r, int c) {
+		/** This method allows for adaptation of the board */
+		//make the new object
+		GalacticObject obj = new GalacticObject(r,c);
+		obj = this.getGalacticObject(r,c);
+		switch (type) {
+		case "asteroid":
+			obj.makeAsteroid();
+			break;
+		case "asteroidfield":
+			obj.makeAsteroidField();
+			break;
+		case "blackhole":
+			obj.makeBlackHole();
+			break;
+		case "moon":
+			obj.makeMoon();
+			break;
+		case "planet":
+			obj.makePlanet();
+			break;
+		case "star":
+			obj.makeStar();
+			break;
+		case "mothership":
+			obj.makeMotherShip();
+			break;
+		case "player":
+			obj.makePlayer();
+			break;
+		case "marked":
+			obj.setMarked(true);
+			break;
+		case "open":
+			obj.makeOpen();
+			break;
+		case "visible":
+			obj.makeVisible(true);
+			break;
+		default:
+			obj.makeOpen();
+		}
+
+		//add the object to the board
+		galaxyArray[r][c] = obj;
+	}
+
+	public void makeGalaxyVisible(int r, int c) {
+		/** This method takes the current coordinates of the player and makes the objects around visible */
+		//define the radius (surrounding coordinates)
+		int r_low = r - 2;
+		int r_high = r + 3;
+		int c_low = c - 2;
+		int c_high = c + 3;
+
+		//reset all to invisible
+		for (int i = 0; i < this.getRows(); i++) {
+			for (int j = 0; j < this.getColumns(); j++) {
+				GalacticObject temporary = this.getGalacticObject(i, j);
+				temporary.makeVisible(false);
+			}
+		}
+
+		//set the objects around the player visible
+		for (int i = r_low; i < r_high; i++) {
+			for (int j = c_low; j < c_high; j++) {
+				if ((this.goodLocation(i, j)) && !(((i == r_low) || (i == r_high - 1)) && ((j == c_low) || (j == c_high - 1)))) {
+					//extract the galacticObject
+					GalacticObject temporary = this.getGalacticObject(i, j);
+					temporary.makeVisible(true);
+				}
+			}
+		}
+	}
+
+	public int initiateLevel() {
+		/** This method sets the level according to the difficulty */
+		int level = 1;
+		switch (this.difficulty) {
+		case "easy":
+			level = 1;
+			break;
+		case "normal":
+			level = 2;
+			break;
+		case "hard":
+			level = 3;
+			break;
+		}
+		return level;
+	}
+
+	public GalacticObject getGalacticObject(int r,int c){
+		/** This method returns the galactic object at location (r,c) */
+		if (goodLocation(r,c)) {
+			return galaxyArray[r][c];
+		} else {
+			return null;
+		}
+	}
+
+	public boolean goodLocation(int r, int c) {
+		/** This method returns true when the location is inside the borders of the board */
+		if ((r < this.row) && (c < this.col) && (r > -1) && (c > -1)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+
+	//setter
+	public void setRows(int rows) {
+		this.row = rows;
+	}
+
+	public void setColumns(int columns) {
+		this.col = columns;
+	}
+
+	public void setDifficulty(String difficulty) {
+		this.difficulty = difficulty;
+	}
+
+	//getter
+	public int getRows() {
+		return this.row;
+	}
+
+	public int getColumns() {
+		return this.col;
+	}
+}
+package Logic;
+
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.time.LocalDate;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.Scanner;
+import java.util.stream.Stream;
+
+public class HighScores {
+
+	private String filename;
+
+	//constructor
+	public HighScores(String filename) {
+		this.setFileName(filename);
+	}
+
+	//methods
+	public String[] readScores(int amount) {
+		/** this method simply reads a certain number of scores from the document equalling the given amount */
+		//count the number of lines in the score document
+		int numberOfLines;
+		try {
+			numberOfLines = countLines(this.filename);
+		} catch (IOException e) {
+			e.printStackTrace();
+			numberOfLines = 1;
+		}
+
+		//adapt to the amount
+		int readLines = 0;
+		int leftOver = 0;
+		if (amount <= numberOfLines) {
+			readLines = amount;
+		} else {
+			readLines = numberOfLines;
+			leftOver = amount - numberOfLines;
+		}
+
+		//read the file and sort the data
+		String[] emptyOutput = new String[leftOver];
+		if (leftOver > 0) {
+			for (int i = 0; i < emptyOutput.length; i++) {
+				emptyOutput[i] = "Unknown:Unknown:Unknown:Unknown";
+			}
+		}
+		String[] data = new String[numberOfLines];
+		String[] sortedData = new String[numberOfLines];
+		String[] output = new String[numberOfLines];
+		data = readFile(this.filename, numberOfLines);
+		sortedData = sortData(data);
+		output = Arrays.copyOfRange(sortedData, 0, readLines);
+
+		String[] result = new String[amount];
+		result = Stream.concat(Arrays.stream(output), Arrays.stream(emptyOutput)).toArray(String[]::new);
+		return result;
+	}
+
+	public void writeScore(double score, String ship, String commander) {
+		/** this method writes a new score to the current file */
+		LocalDate today = LocalDate.now();
+		String newScore = score + ":" + ship + ":" + commander + ":" + today;
+
+		//count the number of lines in the score document
+		int numberOfLines;
+		try {
+			numberOfLines = countLines(this.filename);
+		} catch (IOException e) {
+			e.printStackTrace();
+			numberOfLines = 1;
+		}
+
+		//test how many scores in the file and act accordingly
+		if (numberOfLines < 5) {
+			PrintWriter writer = null;
+			try {
+				writer = new PrintWriter(new FileOutputStream(this.filename, true));
+				writer.println(newScore);
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} finally {
+				writer.close();
+			}
+		} else {
+			int n = numberOfLines + 1;
+			String[] data = new String[numberOfLines];
+			String[] newData = new String[n];
+			String[] sortedData = new String[n];
+			String[] writeData = new String[5];
+
+			//append the new score to the data
+			data = readFile(filename, numberOfLines);
+			for (int i = 0; i < data.length; i++) {
+				newData[i] = data[i];
+			}
+			newData[n - 1] = newScore;
+
+			//sort the data based on the scores (first element of every data string)
+			sortedData = sortData(newData);
+			for (int j = 0; j < writeData.length; j++) {
+				writeData[j] = sortedData[j];
+			}
+
+			//overwrite the document with the first 5 scores
+			PrintWriter writer = null;
+			try {
+				writer = new PrintWriter(filename);
+				for (int k = 0; k < writeData.length; k++) {
+					writer.println(writeData[k]);
+				}
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} finally {
+				writer.close();
+			}
+		}
+	}
+
+	public String[] sortData(String[] inputData) {
+		/** this method sorts a string array of data based upon a given element in the string array (the first) */
+		double[] scores = new double[inputData.length];
+		int[] sortedIndex = new int[inputData.length];
+
+		//extract the first element from the inputData string array
+		for (int i = 0; i < inputData.length; i++) {
+			String[] dataLine = inputData[i].split(":");
+			scores[i] = Double.parseDouble(dataLine[0]);
+		}
+
+		//now sort and return the sorted indices
+		sortedIndex = sortIndices(scores);
+
+		//sort the string array accordingly and return the new sorted array
+		String[] sortedData = new String[inputData.length];
+		for (int j = 0; j < sortedIndex.length; j++) {
+			int index = sortedIndex[j];
+			sortedData[j] = inputData[index];
+		}
+		return sortedData;
+	}
+
+	public String[] readFile(String filename, int numberOfLines) {
+		/** this method reads all the data in a file and returns them as a string array */
+		String[] data = new String[numberOfLines];
+
+		//initialize the reader to the file
+		Scanner reader = null;
+		try {
+			reader = new Scanner(new File(filename));
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+
+		//read the file
+		String line;
+		for (int i = 0; i < numberOfLines; i++) {
+			line = reader.nextLine();
+			data[i] = line;
+		}
+
+		//close readers and return output
+		reader.close();
+		return data;
+	}
+
+	public static int countLines(String filename) throws IOException {
+		/** this method reads the number of lines in the file (which equals the number of times the game has been played */
+		InputStream is1 = new BufferedInputStream(new FileInputStream(filename));
+		try {
+			byte[] c = new byte[1024];
+			int count = 0;
+			int readChars = 0;
+			boolean empty = true;
+			while ((readChars = is1.read(c)) != -1) {
+				empty = false;
+				for (int i = 0; i < readChars; ++i) {
+					if (c[i] == '\n') {
+						++count;
+					}
+				}
+			}
+			return (count == 0 && !empty) ? 1 : count;
+		} finally {
+			is1.close();
+		}
+	}
+
+	public static int[] sortIndices(double[] array) {
+		/** this method takes a list and returns a list of the sorted indices (in descending order) of that list */
+		Integer[] indices = new Integer[array.length];
+		for(int i = 0; i < indices.length; i++) {
+			indices[i] = i;
+		}
+		Comparator<Integer> scoreComparator = new ScoreComparator(array);
+		Arrays.sort(indices, scoreComparator);
+		int[] sortedIndices = new int[array.length];
+		for(int j = 0; j < indices.length; j++) {
+			sortedIndices[j] = indices[j];
+		}
+		return sortedIndices;
+	}
+
+	//setter
+	public void setFileName(String filename) {
+		this.filename = filename;
+	}
+
+	//getter
+	public String getFileName() {
+		return this.filename;
+	}
+}
+package Logic;
+
+/** The Lowersdef interface defines some methods that are applicable on all terrain tiles that can lower the defenses of the player */
+
+public interface Lowersdef {
+	/** The lowersDefense method defines that the terrain tile can lower the defensive stats of the player */
+	public double lowersDefense();
+}
+package Logic;
+
+/** The Mineable interface defines some methods that are applicable on all terrain tiles that can be mined for resources */
+
+public interface Mineable {
+	/** The minesXP method defines that the terrain tile can be mined for experience */
+	public double minesXP();
+
+	/** The minesFuel method defines that the terrain tile can be mined for fuel */
+	public double minesFuel();
+}
+package Logic;
+
+public class Moon implements Mineable {
+	private double experience;
+	private double fuel;
+
+	//constructor
+	public Moon(double experience, double fuel) {
+		this.setExp(experience);
+		this.setFuel(fuel);
+	}
+
+	//methods
+	public double minesXP() {
+		double result = this.getExp();
+		return result;
+	}
+
+	public double minesFuel() {
+		double result = this.getFuel();
+		return result;
+	}
+
+	//setter
+	public void setExp(double experience) {
+		this.experience = experience;
+	}
+	public void setFuel(double fuel) {
+		this.fuel = fuel;
+	}
+
+	//getter
+	public double getExp() {
+		return this.experience;
+	}
+	public double getFuel() {
+		return this.fuel;
+	}
+}
+package Logic;
+
+public class MotherShip implements Fightable {
+	private double hitpoints;
+	private double defense;
+	private double offense;
+
+	//constructor
+	public MotherShip(double hitpoints, double defense, double offense) {
+		this.setHitpoints(hitpoints);
+		this.setDefense(defense);
+		this.setOffense(offense);
+	}
+
+	//methods
+	public double doesDamage() {
+		/** this method returns the attack damage of the ship */
+		return this.getOffense();
+	}
+	public void takesDamage(double attack) {
+		/** this method resets the hitpoints of the ship after an enemy attack */
+		double attackDamage;
+		if (this.getDefense() >= attack) {
+			attackDamage = 0;
+		} else {
+			attackDamage = attack - this.getDefense();
+		}
+		double result = this.hitpoints - attackDamage;
+		if (result >= 0) {
+			this.setHitpoints(result);
+		} else {
+			this.setHitpoints(0);
+		}
+	}
+
+	//setter
+	public void setHitpoints(double hitpoints) {
+		this.hitpoints = hitpoints;
+	}
+	public void setDefense(double defense) {
+		this.defense = defense;
+	}
+	public void setOffense(double offense) {
+		this.offense = offense;
+	}
+
+	//getter
+	public double getHitpoints() {
+		return this.hitpoints;
+	}
+	public double getDefense() {
+		return this.defense;
+	}
+	public double getOffense() {
+		return this.offense;
+	}
+}
+package Logic;
+
+public class Planet implements Mineable {
+	private double experience;
+	private double fuel;
+
+	//constructor
+	public Planet(double experience, double fuel) {
+		this.setExp(experience);
+		this.setFuel(fuel);
+	}
+
+	//methods
+	public double minesXP() {
+		double result = this.getExp();
+		return result;
+	}
+	public double minesFuel() {
+		double result = this.getFuel();
+		return result;
+	}
+
+	//setter
+	public void setExp(double experience) {
+		this.experience = experience;
+	}
+	public void setFuel(double fuel) {
+		this.fuel = fuel;
+	}
+
+	//getter
+	public double getExp() {
+		return this.experience;
+	}
+	public double getFuel() {
+		return this.fuel;
+	}
+}
+package Logic;
+
+public class Player implements Fightable, Changeable {
+
+	private double hitpoints;
+	private double defense;
+	private double offense;
+	private double fuel;
+	private String ship;
+	private String commander;
+	private int row;
+	private int col;
+
+	//constructor
+	public Player(String difficulty, int skillset) {
+		initializePlayer(difficulty, skillset);
+	}
+
+	//methods
+	public void initializePlayer(String difficulty, int skillset) {
+		/** This method initializes all the player attributes when given a certain difficulty and skillset */
+		//make the variables
+		double skillpoints = 0.0;
+		double def = 0.0;
+		double off = 0.0;
+
+		//initialization logic for hp and fuel
+		switch (difficulty) {
+		case "easy":
+			this.setHitpoints(200);
+			this.setFuel(100);
+			skillpoints = 20;
+			break;
+		case "normal":
+			this.setHitpoints(150);
+			this.setFuel(90);
+			skillpoints = 15;
+			break;
+		case "hard":
+			this.setHitpoints(100);
+			this.setFuel(80);
+			skillpoints = 10;
+			break;
+		}
+
+		//initialization logic for offense and defense		
+		double a = (double)(100 - skillset)/100;
+		double b = 1 - a;
+		def = a * skillpoints;
+		off = b * skillpoints;
+		this.setDefense(def);
+		this.setOffense(off);
+	}
+
+	public double doesDamage() {
+		/** this method returns the attack damage of the ship */
+		return this.getOffense();
+	}
+
+	public void takesDamage(double attack) {
+		/** this method resets the hitpoints of the ship after an enemy attack */
+		double attackDamage;
+		if (this.getDefense() >= attack) {
+			attackDamage = 0;
+		} else {
+			attackDamage = attack - this.getDefense();
+		}
+		double result = this.hitpoints - attackDamage;
+		if (result >= 0) {
+			this.setHitpoints(result);
+		} else {
+			this.setHitpoints(0);
+		}
+	}
+
+	public void increaseOffense(double experience) {
+		/** this method increases the offensive capabilities of the player with given experience points */
+		double increase;
+		if (experience >= 0) {
+			increase = this.getOffense() + experience;
+			this.setOffense(increase);
+		}
+	}
+
+	public void increaseDefense(double experience) {
+		/** this method increases the defensive capabilities of the player with given experience points */
+		double increase;
+		if (experience >= 0) {
+			increase = this.getDefense() + experience;
+			this.setDefense(increase);
+		}
+	}
+
+	public void decreaseDefense(double damage) {
+		/** this method decreases the defensive capabilities of the player with given damage (e.g. due to star) */
+		double decrease;
+		if (damage < 0) {
+			decrease = 0;
+		} else {
+			decrease = this.getDefense() - damage;
+		}
+		if (decrease < 0) {
+			this.setDefense(0);
+		} else {
+			this.setDefense(decrease);
+		}
+	}
+
+	public void increaseFuel(double fuel) {
+		/** this method increases the fuel level of the player with a certain specified amount */
+		double increase;
+		if (fuel >= 0) {
+			increase = this.getFuel() + fuel;
+			this.setFuel(increase);
+		}
+	}
+
+	public void decreaseFuel(double fuel) {
+		/** this method reduces the fuel level of the player with a certain specified amount (moving/black hole) */
+		double decrease;
+		if (fuel < 0) {
+			decrease = 0;
+		} else {
+			decrease = this.getFuel() - fuel;
+		}
+		if (decrease < 0) {
+			this.setFuel(0);
+		} else {
+			this.setFuel(decrease);
+		}
+	}
+
+	public void setCoordinates(int row, int col) {
+		/** This method sets the coordinates for the player */
+		this.setRowCoordinate(row);
+		this.setColCoordinate(col);
+	}
+
+	//setter
+	public void setHitpoints(double hitpoints) {
+		this.hitpoints = hitpoints;
+	}
+
+	public void setDefense(double defense) {
+		this.defense = defense;
+	}
+
+	public void setOffense(double offense) {
+		this.offense = offense;
+	}
+
+	public void setFuel(double fuel) {
+		this.fuel = fuel;
+	}
+
+	public void setNameShip(String ship) {
+		this.ship = ship;
+	}
+
+	public void setNameCommander(String commander) {
+		this.commander = commander;
+	}
+
+	public void setRowCoordinate(int row) {
+		this.row = row;
+	}
+
+	public void setColCoordinate(int col) {
+		this.col = col;
+	}
+
+	//getter
+	public double getHitpoints() {
+		return this.hitpoints;
+	}
+
+	public double getDefense() {
+		return this.defense;
+	}
+
+	public double getOffense() {
+		return this.offense;
+	}
+
+	public double getFuel() {
+		return this.fuel;
+	}
+
+	public String getNameShip() {
+		return this.ship;
+	}
+
+	public String getNameCommander() {
+		return this.commander;
+	}
+
+	public int getRowCoordinate() {
+		return this.row;
+	}
+
+	public int getColCoordinate() {
+		return this.col;
+	}
+}
+package Logic;
+
+import java.util.Comparator;
+
+public class ScoreComparator implements Comparator<Integer> {
+	private double scores[];
+
+	//constructor
+	public ScoreComparator(double[] array) {
+		this.setScores(array);
+	}
+
+	//methods
+	public int compare(Integer i, Integer j) {
+		return Double.compare(this.scores[j], this.scores[i]);
+	}
+
+	//setter
+	public void setScores(double[] array) {
+		this.scores = array;
+	}
+
+	//getter
+	public double[] getScores() {
+		return this.scores;
+	}
+}
+package Logic;
+
+/** The Slowable interface defines some methods that are applicable on all terrain tiles that can slow down the player */
+
+public interface Slowable {
+	/** The reducesFuel method defines that the terrain tile reduces the fuel amount of the player */
+	public double reducesFuel();
+}
+package Logic;
+
+public class Star implements Lowersdef{
+	private double damage;
+
+	//constructor
+	public Star(double damage) {
+		this.setDamage(damage);
+	}
+
+	//methods
+	public double lowersDefense() {
+		double result = this.getDamage();
+		return result;
+	}
+
+	//setter
+	public void setDamage(double damage) {
+		this.damage = damage;
+	}
+
+	//getter
+	public double getDamage() {
+		return this.damage;
+	}
+}
+package View;
+
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.GridLayout;
+import java.awt.Point;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+import javax.swing.BorderFactory;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+import javax.swing.event.CaretEvent;
+import javax.swing.event.CaretListener;
+
+import Logic.HighScores;
+
+public class EndGameScreen extends JDialog {
+
+	private static final long serialVersionUID = -5664774431509895326L;
+
+	private boolean done = false;
+
+	private double currentscore;
+	private String content;
+	private String playerName = "";
+	private String playerShip = "";
+
+	private JLabel message = new JLabel("message");
+	private JLabel commander = new JLabel("Enter your name commander...? ", JLabel.RIGHT);
+	private JLabel ship = new JLabel("And your ships name...? ", JLabel.RIGHT);
+	private JTextField inputCommander = new JTextField("");
+	private JTextField inputShip = new JTextField("");
+
+	private GenericButton save = new GenericButton("Save");
+
+	//constructor
+	public EndGameScreen(JFrame parent, String title, String content, double currentscore) {
+		super(parent, title, true);
+		if (parent != null) {
+			Dimension parentSize = parent.getSize(); 
+			Point p = parent.getLocation(); 
+			setLocation(p.x + parentSize.width / 4, p.y + parentSize.height / 4);
+		}
+		this.setContent(content);
+		this.setCurrentScore(currentscore);
+		getContentPane().add(makeDisplay(), BorderLayout.NORTH);
+		getContentPane().add(makeWritingFields(), BorderLayout.CENTER);
+		getContentPane().add(makeButtons(), BorderLayout.SOUTH);
+		this.setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+		this.setModal(true);
+		pack();
+		this.setVisible(true);
+	}
+
+	//methods
+	public JPanel makeDisplay() {
+		/** This method displays the content */
+		JPanel display = new JPanel();
+		message.setText(this.getContent());
+		display.add(message);
+		return display;
+	}
+
+	public JPanel makeWritingFields() {
+		/** This method makes the fields in which the player can write his/her name */
+		//make the panel
+		JPanel inputFields = new JPanel();
+		inputFields.setLayout(new GridLayout(2,2));
+		inputFields.setBorder(BorderFactory.createEmptyBorder(32,32,32,32));
+
+		//settings of the components
+		inputCommander.addCaretListener(new textfieldListener());
+		inputShip.addCaretListener(new textfieldListener());
+
+		//build the panel and return result
+		inputFields.add(commander);
+		inputFields.add(inputCommander);
+		inputFields.add(ship);
+		inputFields.add(inputShip);
+		return inputFields;
+	}
+
+	public JPanel makeButtons() {
+		/** This method makes the buttons to execute commands */
+		//make the panel
+		JPanel buttonPanel = new JPanel();
+
+		//set properties of the elements
+		save.setEnabled(false);
+		save.addActionListener(new buttonListener());
+
+		//build the panel and return
+		buttonPanel.add(save);
+		return buttonPanel;
+	}
+
+	public void updateButton() {
+		/** This method updates the button */
+		if (playerName.isEmpty() || playerShip.isEmpty()) {
+			save.setEnabled(false);
+		} else if (!playerName.isEmpty() && !playerShip.isEmpty()) {
+			save.setEnabled(true);
+		}
+	}
+
+	//class for the caret listener and action listener
+	private class textfieldListener implements CaretListener {
+		@Override
+		public void caretUpdate(CaretEvent e) {
+			//commander name
+			String input1 = inputCommander.getText();
+			input1.trim();
+			setPlayerName(input1);
+
+			//ship name
+			String input2 = inputShip.getText();
+			input2.trim();
+			setPlayerShip(input2);
+
+			//update the button
+			updateButton();
+		}
+	}
+
+	private class buttonListener implements ActionListener {
+		@Override
+		public void actionPerformed(ActionEvent f) {
+			//write the highscore away
+			HighScores scoreFile = new HighScores("src/Highscores.txt");
+			scoreFile.writeScore(currentscore, playerShip, playerName);
+
+			//dispose of the popup
+			setBoolean(true);
+			dispose();
+		}
+	}
+
+	//setter
+	public void setContent(String content) {
+		this.content = content;
+	}
+
+	public void setPlayerName(String name) {
+		this.playerName = name;
+	}
+
+	public void setPlayerShip(String ship) {
+		this.playerShip = ship;
+	}
+
+	public void setCurrentScore(double currentscore) {
+		this.currentscore = currentscore;
+	}
+
+	public void setBoolean(boolean value) {
+		this.done = value;
+	}
+
+	//getter
+	public String getContent() {
+		return this.content;
+	}
+
+	public boolean getBoolean() {
+		return this.done;
+	}
+}
+package View;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.GridLayout;
+import java.awt.Insets;
+import java.awt.event.ActionListener;
+import java.io.File;
+import java.io.IOException;
+
+import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+import javax.swing.WindowConstants;
+
+import Controller.WindowHandler;
+import Logic.GalacticObject;
+import Logic.Galaxy;
+
+public class GameScreen extends JFrame {
+
+	private static final long serialVersionUID = -1686551525997523257L;
+
+	private ActionListener endl;
+	private ActionListener gl;
+
+	// variables for the dimensions of gameboard
+	private int boardWidth;
+	private int boardLength;
+
+	//menuPanel buttons
+	private GenericButton start = new GenericButton("startmenu");
+	private GenericButton scores = new GenericButton("highscores");
+	private GenericButton exit = new GenericButton("exit");
+
+	//statsPanel textfield and labels
+	private JLabel scoreLabel = new JLabel("Total score: ", JLabel.RIGHT);
+	private JTextField totalScoreDisplayed = new JTextField("");
+	private JLabel hitpointsLabel = new JLabel("Hitpoints: ", JLabel.RIGHT); //TO DO: add a label after the textfield with "/100" later on
+	private JTextField hitpointsDisplayed = new JTextField("");
+	private JLabel fuelLabel = new JLabel("Fuel: ", JLabel.RIGHT); //TO DO: add a label after textfield with "/100"
+	private JTextField fuelDisplayed = new JTextField("");
+	private JLabel offenseLabel = new JLabel("Offense: ", JLabel.RIGHT);
+	private JTextField offenseDisplayed = new JTextField("");
+	private JLabel defenseLabel = new JLabel("Defense: ", JLabel.RIGHT);
+	private JTextField defenseDisplayed = new JTextField("");
+	private JLabel experienceLabel = new JLabel("Experience points: ", JLabel.RIGHT);
+	private JTextField experienceDisplayed = new JTextField("");
+
+	//buttongrid
+	private JPanel boardPanel;
+	private JButton[][] gridButton;
+	//Imageicons for the gridbuttons
+	private ImageIcon invisibleIcon;
+	private ImageIcon openIcon;
+	private ImageIcon playerIcon;
+	private ImageIcon moonIcon;
+	private ImageIcon blackhole;
+	private ImageIcon enemyLVL1Icon;
+	private ImageIcon enemyLVL2Icon;
+	private ImageIcon enemyLVL3Icon;
+	private ImageIcon mothershipIcon;
+	private ImageIcon planetIcon;
+	private ImageIcon starIcon;
+	private ImageIcon asteroidIcon;
+	private ImageIcon asteroidfieldIcon;
+
+	//constructor
+	public GameScreen(String title, int boardWidth, int boardLength, ActionListener gl, ActionListener endl) {
+		super(title);
+		this.setBoardWidth(boardWidth);
+		this.setBoardLength(boardLength);
+		this.setGameListener(gl);
+		this.setEndGameListener(endl);
+		this.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+		this.addWindowListener(new WindowHandler());
+		this.setResizable(false);
+		makeGameScreen();
+		pack();
+		this.setLocationRelativeTo(null);
+		this.setVisible(true);
+	}
+
+	//methods
+	public void makeGameScreen() {
+		getContentPane().setLayout(new BorderLayout());
+		getContentPane().add(makeMenuPanel(), BorderLayout.NORTH);
+		getContentPane().add(makeStatsPanel(), BorderLayout.EAST);
+		getContentPane().add(makeGameBoard(), BorderLayout.CENTER);
+	}
+
+	public JPanel makeMenuPanel() {
+		//make the three buttons and set their properties
+		start.setText("Startmenu"); 
+		start.addActionListener(this.getEndGameListener());
+		scores.setText("Highscores");
+		scores.addActionListener(this.getEndGameListener());
+		exit.setText("Exit");
+		exit.addActionListener(this.getEndGameListener());
+
+		//make the JPanel and add the buttons
+		JPanel menuPanel = new JPanel();
+		menuPanel.setLayout(new GridLayout(1,3,10,0));
+		menuPanel.setBorder(BorderFactory.createEmptyBorder(32, 32, 32, 32));
+		menuPanel.add(start);
+		menuPanel.add(scores);
+		menuPanel.add(exit);
+
+		//return the result
+		return menuPanel;
+	}
+
+	//game board methods
+	public JPanel makeGameBoard() {
+		/** This method makes a first version of the game board when the object is first called */
+
+		//create a new JPanel
+		boardPanel = new JPanel();
+		boardPanel.setLayout(new GridLayout(this.boardWidth,this.boardLength));
+
+		//create ImageIcons
+		try {
+			invisibleIcon = new ImageIcon(ImageIO.read(
+					new File("resources/invisible.png")));
+			openIcon = new ImageIcon(ImageIO.read(
+					new File("resources/open.png")));
+			playerIcon = new ImageIcon(ImageIO.read(
+					new File("resources/player.png")));
+			moonIcon = new ImageIcon(ImageIO.read(
+					new File("resources/moon.png")));
+			blackhole = new ImageIcon(ImageIO.read(
+					new File("resources/blackhole.png")));
+			enemyLVL1Icon = new ImageIcon(ImageIO.read(
+					new File("resources/enemy1.png")));
+			enemyLVL2Icon = new ImageIcon(ImageIO.read(
+					new File("resources/enemy2.png")));
+			enemyLVL3Icon = new ImageIcon(ImageIO.read(
+					new File("resources/enemy3.png")));
+			mothershipIcon = new ImageIcon(ImageIO.read(
+					new File("resources/mothership.png")));
+			starIcon = new ImageIcon(ImageIO.read(
+					new File("resources/star.png")));
+			asteroidIcon = new ImageIcon(ImageIO.read(
+					new File("resources/asteroid.png")));
+			asteroidfieldIcon = new ImageIcon(ImageIO.read(
+					new File("resources/asteroidfield.png")));
+			planetIcon = new ImageIcon(ImageIO.read(
+					new File("resources/planet.png")));
+		}
+		catch(IOException ex) {
+			System.out.println("Image file error! Printing stack trace.");
+			ex.printStackTrace();
+		}
+
+		//create a 2D array of JButtons
+		gridButton = new JButton[this.boardWidth][this.boardLength];
+
+		//for-loops to place buttons in gridButton
+		for(int r = 0; r < this.boardWidth; r++) {
+			for(int c = 0; c < this.boardLength; c++){
+
+				// creates new button
+				gridButton[r][c]=new JButton(r+":"+c);
+				gridButton[r][c].setActionCommand(r+":"+c);
+				gridButton[r][c].setIcon(invisibleIcon);
+				gridButton[r][c].setText("");
+				gridButton[r][c].setIcon(null);
+
+				//format gridButton[r][c]
+				Color space = new Color(44, 44, 64);
+				gridButton[r][c].setBackground(space); //all buttons by default space purple background color
+				gridButton[r][c].setPreferredSize(new Dimension(32, 32)); 
+				gridButton[r][c].setMargin(new Insets(0, 0, 0, 0));
+				gridButton[r][c].setBorder(null);
+				gridButton[r][c].addActionListener(this.getGameListener());
+
+				//adds button to panel
+				boardPanel.add(gridButton[r][c]);
+			}
+		}
+		//return boardPanel
+		return boardPanel;
+	}
+
+	public void updateGameBoard(Galaxy board) {
+		/** This method initializes the board when the galaxy is first created in the game logic and updates it throughout the game */
+		Galaxy galaxyArray = board;
+
+		for (int r = 0; r < this.boardWidth; r++) {
+			for (int c = 0; c < this.boardLength; c++) {
+
+				//make galactic object and extract info from Galaxy
+				GalacticObject temporary = new GalacticObject(r,c);
+				temporary = galaxyArray.getGalacticObject(r,c);
+
+				//check the object and act accordingly
+				if (temporary.isAsteroid() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(asteroidIcon);
+				} else if (temporary.isAsteroidField() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(asteroidfieldIcon);
+				} else if (temporary.isBlackHole() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(blackhole);
+				} else if (temporary.isMoon() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(moonIcon);
+				} else if (temporary.isPlanet() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(planetIcon);
+				} else if (temporary.isStar() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(starIcon);
+				} else if (temporary.isPlayer() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(playerIcon);
+				} else if (temporary.isShipLevel1() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(enemyLVL1Icon);
+				} else if (temporary.isShipLevel2() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(enemyLVL2Icon);
+				} else if (temporary.isShipLevel3() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(enemyLVL3Icon);
+				} else if (temporary.isMotherShip() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(mothershipIcon);
+				} else if (temporary.isOpen() && temporary.isVisible()) {
+					gridButton[r][c].setIcon(openIcon);
+				} else {
+					gridButton[r][c].setIcon(invisibleIcon);
+				}
+			}
+		}	
+	}
+
+	//statspanel methods
+	public JPanel makeStatsPanel() {
+		/** This method makes the player stats panel where all the player stats are visible */
+		// Don't let the user change their stats
+		totalScoreDisplayed.setEditable(false);
+		totalScoreDisplayed.addActionListener(this.getGameListener());
+		hitpointsDisplayed.setEditable(false);
+		hitpointsDisplayed.addActionListener(this.getGameListener());
+		fuelDisplayed.setEditable(false);
+		fuelDisplayed.addActionListener(this.getGameListener());
+		offenseDisplayed.setEditable(false);
+		offenseDisplayed.addActionListener(this.getGameListener());
+		defenseDisplayed.setEditable(false);
+		defenseDisplayed.addActionListener(this.getGameListener());
+		experienceDisplayed.setEditable(false);
+		experienceDisplayed.addActionListener(this.getGameListener());
+
+		// create a new JPanel
+		JPanel statsPanel = new JPanel();
+		statsPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 10, 10)); //play around with border settings later
+		statsPanel.setLayout(new GridLayout(6,2)); // if you want "Hitpoints:" "value" "/100" you'll need 3 collumns
+		statsPanel.add(scoreLabel);
+		statsPanel.add(totalScoreDisplayed);
+		statsPanel.add(hitpointsLabel);
+		statsPanel.add(hitpointsDisplayed);
+		statsPanel.add(fuelLabel);
+		statsPanel.add(fuelDisplayed);
+		statsPanel.add(offenseLabel);
+		statsPanel.add(offenseDisplayed);
+		statsPanel.add(defenseLabel);
+		statsPanel.add(defenseDisplayed);
+		statsPanel.add(experienceLabel);
+		statsPanel.add(experienceDisplayed);
+
+		// return the panel
+		return statsPanel;
+	}
+
+	public void updateStatsPanel(double[] stats) {
+		/** This method updates the player stats during the game */
+		//initialize
+		String score = Double.toString(stats[0]);
+		String hp = Double.toString(stats[1]);
+		String fuel = Double.toString(stats[2]);
+		String off = Double.toString(stats[3]);
+		String def = Double.toString(stats[4]);
+		String xp = Double.toString(stats[5]);
+
+		//fill in the labels
+		totalScoreDisplayed.setText(score);
+		hitpointsDisplayed.setText(hp);
+		fuelDisplayed.setText(fuel);
+		offenseDisplayed.setText(off);
+		defenseDisplayed.setText(def);
+		experienceDisplayed.setText(xp);
+	}
+
+	//reset everything
+	public void resetGameAndStats() {
+		/** This method resets everything to the original settings */
+		//reset the game board
+		for (int y = 0; y < this.boardWidth; y++) {
+			for (int x = 0; x < this.boardLength; x++) {
+				gridButton[y][x].setText("");
+			}
+		}
+
+		//reset the statistics panel
+		totalScoreDisplayed.setText("");
+		hitpointsDisplayed.setText("");
+		fuelDisplayed.setText("");
+		offenseDisplayed.setText("");
+		defenseDisplayed.setText("");
+		experienceDisplayed.setText("");
+	}
+
+	//setter
+	public void setEndGameListener(ActionListener endl) {
+		this.endl = endl;
+	}
+
+	public void setGameListener(ActionListener gl) {
+		this.gl = gl;
+	}
+
+	public void setBoardWidth(int boardWidth) {
+		this.boardWidth = boardWidth;
+	}
+
+	public void setBoardLength(int boardLength) {
+		this.boardLength = boardLength; 
+	}
+
+	//getter
+	public ActionListener getEndGameListener() {
+		return this.endl;
+	}
+
+	public ActionListener getGameListener() {
+		return this.gl;
+	}
+}
+package View;
+
+import javax.swing.JButton;
+
+public class GenericButton extends JButton {
+
+	private static final long serialVersionUID = -7946982448355071282L;
+
+	//constructor
+	public GenericButton(String button) {
+		super(button);
+		this.setActionCommand(button);
+	}
+}
+package View;
+
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.Point;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+import javax.swing.BorderFactory;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+
+public class GenericPopUp extends JDialog {
+
+	private static final long serialVersionUID = -8753989167597490456L;
+
+	private String content;
+	private JLabel readout = new JLabel("text");
+	private final GenericButton button = new GenericButton("OK");
+
+	//constructor
+	public GenericPopUp(JFrame parent, String title, String content) {
+		super(parent, title, true);
+		if (parent != null) {
+			Dimension parentSize = parent.getSize(); 
+			Point p = parent.getLocation(); 
+			setLocation(p.x + parentSize.width / 4, p.y + parentSize.height / 4);
+		}
+		this.setContent(content);
+		getContentPane().add(makeDisplay());
+		getContentPane().add(makeButtonPanel(), BorderLayout.SOUTH);
+		this.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+		this.setModal(true);
+		pack();
+		this.setVisible(true);
+	}
+
+	//methods
+	public JPanel makeDisplay() {
+		/** This method makes the JLabel and adds the necessary content to it, 
+		 * namely the content specified in the constructor */
+		JPanel panel = new JPanel();
+		display(this.content);
+		panel.add(readout);
+		return panel;
+	}
+
+	public JPanel makeButtonPanel() {
+		/** This method makes the button panel, 
+		 * which in this case only contains one button, namely the OK button */
+		JPanel panel = new JPanel();
+		panel.setBorder(BorderFactory.createEmptyBorder(20,20,20,20));
+		button.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				//react to hitting the OK button
+				dispose();
+			}
+		});
+		panel.add(button);
+		return panel;
+	}
+
+	private void display(String content) {
+		/** This method adds the content to the label, while checking that the content is not zero */
+		if (content.equals("")) {
+			readout.setText(" ");
+		} else {
+			readout.setText(content);
+		}
+	}
+
+	//setter
+	public void setContent(String content) {
+		this.content = content;
+	}
+
+	//getter
+	public String getContent() {
+		return this.content;
+	}
+}
+package View;
+
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.GridLayout;
+import java.awt.Point;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+import javax.swing.BorderFactory;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+
+import Logic.HighScores;
+
+public class HighscoreScreen extends JDialog {
+
+	private static final long serialVersionUID = 7254320023172953429L;
+
+	private JLabel score1 = new JLabel("score1");
+	private JLabel score2 = new JLabel("score2");
+	private JLabel score3 = new JLabel("score3");
+	private JLabel score4 = new JLabel("score4");
+	private JLabel score5 = new JLabel("score5");
+	private GenericButton button = new GenericButton("Return");
+
+	//constructor
+	public HighscoreScreen(JFrame parent, String title) {
+		super(parent, title, true);
+		if (parent != null) {
+			Dimension parentSize = parent.getSize(); 
+			Point p = parent.getLocation(); 
+			setLocation(p.x + parentSize.width / 4, p.y + parentSize.height / 4);
+		}
+		getContentPane().add(makeDisplay());
+		getContentPane().add(makeButtonPanel(), BorderLayout.SOUTH);
+		this.setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+		this.setResizable(false);
+		this.setModal(true);
+		pack();
+		this.setVisible(true);
+	}
+
+	//methods
+	public JPanel makeDisplay() {
+		JPanel panel = new JPanel();
+		panel.setLayout(new GridLayout(5,1,0,20));
+		panel.setBorder(BorderFactory.createEmptyBorder(40,40,40,40));
+		retrieveHighScores();
+		panel.add(score1);
+		panel.add(score2);
+		panel.add(score3);
+		panel.add(score4);
+		panel.add(score5);
+		return panel;
+	}
+
+	public JPanel makeButtonPanel() {
+		JPanel panel = new JPanel();
+		button.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				//react to hitting the return button
+				dispose();
+			}
+		});
+		panel.add(button);
+		return panel;
+	}
+
+	public void retrieveHighScores() {
+		HighScores scoreFile = new HighScores("src/Highscores.txt");
+		String[] list = new String[5];
+		list = scoreFile.readScores(5);
+		String[] textLabels = new String[5];
+		for (int i = 0; i < list.length; i++) {
+			String[] text = list[i].split(":");
+			textLabels[i] = "Commander " + text[2] + " with his ship " + text[1] + " scored " + text[0]
+					+ " points on " + text[3] + " !";
+		}	
+		score1.setText(textLabels[0]);
+		score2.setText(textLabels[1]);
+		score3.setText(textLabels[2]);
+		score4.setText(textLabels[3]);
+		score5.setText(textLabels[4]);	
+	}
+}
+package View;
+
+import java.awt.Component;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
+import java.awt.event.ActionListener;
+import java.util.Dictionary;
+import java.util.Hashtable;
+import java.awt.GridBagConstraints;
+import javax.swing.BorderFactory;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JSlider;
+import javax.swing.JTextArea;
+import javax.swing.event.ChangeListener;
+
+import Controller.WindowHandler;
+
+public class StartScreen extends JFrame {
+
+	private static final long serialVersionUID = -3049454687261249999L;
+
+	private ActionListener al;
+	private ChangeListener cl;
+
+	private JTextArea textTop = new JTextArea("texttop");
+	private JLabel labelMiddle = new JLabel("middlelabel");
+	private GenericButton diff1 = new GenericButton("easy");
+	private GenericButton diff2 = new GenericButton("normal");
+	private GenericButton diff3 = new GenericButton("hard");
+	private GenericButton start = new GenericButton("start");
+	private GenericButton scores = new GenericButton("highscores");
+	private GenericButton exit = new GenericButton("exit");
+
+	//constructor
+	public StartScreen(String title, ActionListener al, ChangeListener cl) {
+		super(title);
+		this.setActionListener(al);
+		this.setChangeListener(cl);
+		this.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
+		this.addWindowListener(new WindowHandler());
+		this.setResizable(true);
+		makeStartScreen();
+		pack();
+		this.setLocationRelativeTo(null);
+		pack(); //calling pack() twice solves some strange packing issues I was having
+		this.setVisible(true);
+	}
+
+	//methods
+	public void makeStartScreen() {
+		/** This method draws the startscreen by defining a JFrame and filling it up with JPanels using the various methods */
+		//using GridBagLayout allows for flexibility but good constraints need to be formulated
+		getContentPane().setLayout(new GridBagLayout());
+		// gridbagconstraints for top panel and add to frame
+		GridBagConstraints gbcTop = new GridBagConstraints();
+		gbcTop.gridy=0;
+		gbcTop.fill = GridBagConstraints.BOTH;
+		getContentPane().add(makeTopDisplay(), gbcTop);
+		// gridbagconstraints for Difficulty selection panel and add to frame
+		GridBagConstraints gbcDifslct = new GridBagConstraints();
+		gbcDifslct.gridy=1;
+		getContentPane().add(makeDifficultySelection(), gbcDifslct);
+		// gridbagconstraints for MiddleDisplay and add to frame
+		GridBagConstraints gbcMiddle = new GridBagConstraints();
+		gbcMiddle.gridy=2;
+		getContentPane().add(makeMiddleDisplay(), gbcMiddle);
+		// gridbagconstraints for bottom selection panel and add to frame
+		GridBagConstraints gbcBottom = new GridBagConstraints();
+		gbcBottom.gridy=3;
+		getContentPane().add(makeBottomSelection(), gbcBottom);
+	}
+
+	public JPanel makeTopDisplay() {
+		/** This method makes the top display by simply adding a textlabel to the JPanel */
+		JPanel topPanel = new JPanel();
+		topPanel.setLayout(new GridLayout(1,1));
+		textTop.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+		textTop.setText("Welcome to Hyperspace Hazard!\n\n"
+				+ "The Alpha Centauri Conglomerate has received word from a rebel uprising in their mining territories."
+				+ " Suppress this rebellion and DESTROY the rebel MOTHERSHIP.\n"
+				+ "You will face many dangers. Good luck, captain!\n\n"
+				+ "Select your difficulty level below and choose a skillpoint distribution on the slider");
+
+		textTop.setOpaque(false);
+		textTop.setLineWrap(true);
+		textTop.setWrapStyleWord(true);
+		textTop.setEditable(false);
+		topPanel.add(textTop);
+		return topPanel;
+	}
+
+	public JPanel makeDifficultySelection() {
+		/** This method makes the difficulty selection panel by adding three buttons */
+		//make the three buttons for difficulty selection as well as set their properties
+		diff1.setText("Recruit");
+		diff1.addActionListener(this.getActionListener());
+		diff2.setText("Soldier");
+		diff2.addActionListener(this.getActionListener());
+		diff3.setText("Commander");
+		diff3.addActionListener(this.getActionListener());
+
+		//make the JPanel and add the buttons to the panel
+		JPanel difficultyPanel = new JPanel();
+		difficultyPanel.setLayout(new GridLayout(1,3,10,0));
+		difficultyPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+		difficultyPanel.add(diff1);
+		difficultyPanel.add(diff2);
+		difficultyPanel.add(diff3);
+
+		//return the result
+		return difficultyPanel;
+	}
+
+	public JPanel makeMiddleDisplay() {
+		/** This method makes the middle part of the start screen by adding a textlabel and a slider */
+		//make the JPanel and add the textlabel and the slider
+		JPanel middlePanel = new JPanel();
+		middlePanel.setLayout(new GridLayout(2,1,0,10));
+		middlePanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+		labelMiddle.setText("Choose your skillpoints!");
+		middlePanel.add(labelMiddle);
+		middlePanel.add(makeSlider());
+
+		//return the result
+		return middlePanel;
+	}
+
+	public JPanel makeBottomSelection() {
+		/** This method makes the bottom part of the start screen by adding the start, exit and highscores button */
+		//make the three buttons and set their properties
+		start.setText("Start");
+		start.addActionListener(this.getActionListener());
+		scores.setText("Highscores");
+		scores.addActionListener(this.getActionListener());
+		exit.setText("Exit");
+		exit.addActionListener(this.getActionListener());
+
+		//make the JPanel and add the buttons
+		JPanel bottomPanel = new JPanel();
+		bottomPanel.setLayout(new GridLayout(1,3,10,0));
+		bottomPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
+		bottomPanel.add(start);
+		bottomPanel.add(scores);
+		bottomPanel.add(exit);
+
+		//return the result
+		return bottomPanel;
+	}
+
+	public JSlider makeSlider() {
+		/** This method returns a slider with icon labels */
+		//initiate the slider
+		JSlider slider = new JSlider();
+		slider.addChangeListener(this.getChangeListener());
+		slider.setPaintTicks(true);
+		slider.setPaintLabels(true);
+		slider.setSnapToTicks(true);
+		slider.setMajorTickSpacing(20);
+		slider.setMinorTickSpacing(5);
+		slider.setValue(50);
+
+		//add labels to the ticks
+		Dictionary<Integer, Component> labelTable = new Hashtable<Integer, Component>();
+		labelTable.put(0, new JLabel("Defense"));
+		labelTable.put(50, new JLabel("Balanced"));
+		labelTable.put(100, new JLabel("Offense"));
+
+		//add the table to the slider and return the result
+		slider.setLabelTable(labelTable);
+		return slider;
+	}
+
+	//setter
+	public void setActionListener(ActionListener al) {
+		this.al = al;
+	}
+
+	public void setChangeListener(ChangeListener cl) {
+		this.cl = cl;
+	}
+
+	//getter
+	public ActionListener getActionListener() {
+		return this.al;
+	}
+
+	public ChangeListener getChangeListener() {
+		return this.cl;
+	}
+}
+

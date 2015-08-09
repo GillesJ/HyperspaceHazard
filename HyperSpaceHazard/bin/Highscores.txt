@@ -1,0 +1,5 @@
+140.0:Stardestroyer:CaptainKirk:2014-12-27
+80.0:Enterprise:Spock:2015-01-03
+74.04:Knock knock:The Who:2014-12-01
+36.0:Destroyer:Lord Vader:2014-11-29
+35.0:Jacobs:Kestral:2014-12-31
